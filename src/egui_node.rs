@@ -2,16 +2,16 @@ use crate::{
     EguiContext, EguiSettings, EguiShapes, WindowSize, EGUI_PIPELINE_HANDLE,
     EGUI_TEXTURE_RESOURCE_BINDING_NAME, EGUI_TRANSFORM_RESOURCE_BINDING_NAME,
 };
+use bevy::core::bytes_of;
 use bevy::{
     app::{Events, ManualEventReader},
     asset::{AssetEvent, Assets, Handle},
-    core::AsBytes,
     ecs::world::World,
     log,
     render::{
         pass::{
-            ClearColor, LoadOp, Operations, PassDescriptor,
-            RenderPassDepthStencilAttachmentDescriptor, TextureAttachment,
+            ClearColor, LoadOp, Operations, PassDescriptor, RenderPassDepthStencilAttachment,
+            TextureAttachment,
         },
         pipeline::{
             BindGroupDescriptor, IndexFormat, InputStepMode, PipelineCompiler, PipelineDescriptor,
@@ -69,7 +69,7 @@ pub struct TextureResource {
 
 impl EguiNode {
     pub fn new(msaa: &Msaa, window: WindowId) -> Self {
-        let color_attachments = vec![msaa.color_attachment_descriptor(
+        let color_attachments = vec![msaa.color_attachment(
             TextureAttachment::Input("color_attachment".to_string()),
             TextureAttachment::Input("color_resolve_target".to_string()),
             Operations {
@@ -77,7 +77,7 @@ impl EguiNode {
                 store: true,
             },
         )];
-        let depth_stencil_attachment = RenderPassDepthStencilAttachmentDescriptor {
+        let depth_stencil_attachment = RenderPassDepthStencilAttachment {
             attachment: TextureAttachment::Input("depth".to_string()),
             depth_ops: Some(Operations {
                 load: LoadOp::Clear(1.0),
@@ -250,24 +250,32 @@ impl Node for EguiNode {
                 .cloned();
 
             for vertex in &triangles.vertices {
-                vertex_buffer.extend_from_slice([vertex.pos.x, vertex.pos.y].as_bytes());
-                vertex_buffer.extend_from_slice([vertex.uv.x, vertex.uv.y].as_bytes());
-                vertex_buffer.extend_from_slice(
-                    vertex
-                        .color
-                        .to_array()
-                        .iter()
-                        .map(|c| *c as f32)
-                        .collect::<Vec<_>>()
-                        .as_bytes(),
-                );
+                vertex_buffer.extend_from_slice(bytes_of(&[vertex.pos.x, vertex.pos.y]));
+                vertex_buffer.extend_from_slice(bytes_of(&[vertex.uv.x, vertex.uv.y]));
+                let color = vertex
+                    .color
+                    .to_array()
+                    .iter()
+                    .map(|c| *c as f32)
+                    .collect::<Vec<_>>();
+                unsafe {
+                    vertex_buffer.extend_from_slice(std::slice::from_raw_parts(
+                        color.as_ptr() as *const u8,
+                        color.len() * 4,
+                    ));
+                }
             }
             let indices_with_offset = triangles
                 .indices
                 .iter()
                 .map(|i| i + index_offset)
                 .collect::<Vec<_>>();
-            index_buffer.extend_from_slice(indices_with_offset.as_slice().as_bytes());
+            unsafe {
+                index_buffer.extend_from_slice(std::slice::from_raw_parts(
+                    indices_with_offset.as_ptr() as *const u8,
+                    indices_with_offset.len() * 4,
+                ));
+            }
             index_offset += triangles.vertices.len() as u32;
 
             let x_viewport_clamp = (x + w).saturating_sub(window_size.physical_width as u32);
@@ -408,19 +416,19 @@ impl EguiNode {
                 VertexAttribute {
                     name: Cow::from("Vertex_Position"),
                     offset: 0,
-                    format: VertexFormat::Float2,
+                    format: VertexFormat::Float32x2,
                     shader_location: 0,
                 },
                 VertexAttribute {
                     name: Cow::from("Vertex_Uv"),
-                    offset: VertexFormat::Float2.get_size(),
-                    format: VertexFormat::Float2,
+                    offset: VertexFormat::Float32x2.get_size(),
+                    format: VertexFormat::Float32x2,
                     shader_location: 1,
                 },
                 VertexAttribute {
                     name: Cow::from("Vertex_Color"),
-                    offset: VertexFormat::Float2.get_size() + VertexFormat::Float2.get_size(),
-                    format: VertexFormat::Float4,
+                    offset: VertexFormat::Float32x2.get_size() + VertexFormat::Float32x2.get_size(),
+                    format: VertexFormat::Float32x4,
                     shader_location: 2,
                 },
             ];
@@ -694,7 +702,7 @@ impl EguiNode {
             format_size
                 * aligned_width
                 * texture.size.height as usize
-                * texture.size.depth as usize
+                * texture.size.depth_or_array_layers as usize
         ];
         texture
             .data

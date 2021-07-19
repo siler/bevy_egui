@@ -59,6 +59,7 @@ mod systems;
 mod transform_node;
 
 use crate::{egui_node::EguiNode, systems::*, transform_node::EguiTransformNode};
+use bevy::render::pipeline::BlendComponent;
 use bevy::{
     app::{AppBuilder, CoreStage, Plugin},
     asset::{Assets, Handle, HandleUntyped},
@@ -72,8 +73,8 @@ use bevy::{
     render::{
         pipeline::{
             BlendFactor, BlendOperation, BlendState, ColorTargetState, ColorWrite, CompareFunction,
-            CullMode, DepthBiasState, DepthStencilState, FrontFace, MultisampleState,
-            PipelineDescriptor, PrimitiveState, StencilFaceState, StencilState,
+            DepthBiasState, DepthStencilState, FrontFace, MultisampleState, PipelineDescriptor,
+            PrimitiveState, StencilFaceState, StencilState,
         },
         render_graph::{base, base::Msaa, RenderGraph, WindowSwapChainNode, WindowTextureNode},
         shader::{Shader, ShaderStage, ShaderStages},
@@ -493,7 +494,7 @@ fn build_egui_pipeline(shaders: &mut Assets<Shader>, sample_count: u32) -> Pipel
     PipelineDescriptor {
         primitive: PrimitiveState {
             front_face: FrontFace::Cw,
-            cull_mode: CullMode::None,
+            cull_mode: None,
             ..Default::default()
         },
         depth_stencil: Some(DepthStencilState {
@@ -511,20 +512,21 @@ fn build_egui_pipeline(shaders: &mut Assets<Shader>, sample_count: u32) -> Pipel
                 slope_scale: 0.0,
                 clamp: 0.0,
             },
-            clamp_depth: false,
         }),
         color_target_states: vec![ColorTargetState {
             format: TextureFormat::default(),
-            color_blend: BlendState {
-                src_factor: BlendFactor::One,
-                dst_factor: BlendFactor::OneMinusSrcAlpha,
-                operation: BlendOperation::Add,
-            },
-            alpha_blend: BlendState {
-                src_factor: BlendFactor::One,
-                dst_factor: BlendFactor::OneMinusSrcAlpha,
-                operation: BlendOperation::Add,
-            },
+            blend: Some(BlendState {
+                alpha: BlendComponent {
+                    src_factor: BlendFactor::One,
+                    dst_factor: BlendFactor::OneMinusSrcAlpha,
+                    operation: BlendOperation::Add,
+                },
+                color: BlendComponent {
+                    src_factor: BlendFactor::One,
+                    dst_factor: BlendFactor::OneMinusSrcAlpha,
+                    operation: BlendOperation::Add,
+                },
+            }),
             write_mask: ColorWrite::ALL,
         }],
         multisample: MultisampleState {
