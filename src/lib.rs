@@ -61,7 +61,7 @@ mod transform_node;
 use crate::{egui_node::EguiNode, systems::*, transform_node::EguiTransformNode};
 use bevy::render::pipeline::BlendComponent;
 use bevy::{
-    app::{AppBuilder, CoreStage, Plugin},
+    app::{App, CoreStage, Plugin},
     asset::{Assets, Handle, HandleUntyped},
     ecs::{
         schedule::{ParallelSystemDescriptorCoercion, StageLabel, SystemLabel, SystemStage},
@@ -357,7 +357,7 @@ pub enum EguiSystem {
 }
 
 impl Plugin for EguiPlugin {
-    fn build(&self, app: &mut AppBuilder) {
+    fn build(&self, app: &mut App) {
         app.add_stage_before(
             RenderStage::RenderResource,
             EguiStage::UiFrameEnd,
@@ -383,17 +383,16 @@ impl Plugin for EguiPlugin {
             process_output.system().label(EguiSystem::ProcessOutput),
         );
 
-        let world = app.world_mut();
-        world.get_resource_or_insert_with(EguiSettings::default);
-        world.get_resource_or_insert_with(HashMap::<WindowId, EguiInput>::default);
-        world.get_resource_or_insert_with(HashMap::<WindowId, EguiOutput>::default);
-        world.get_resource_or_insert_with(HashMap::<WindowId, WindowSize>::default);
-        world.get_resource_or_insert_with(HashMap::<WindowId, EguiShapes>::default);
+        app.world.get_resource_or_insert_with(EguiSettings::default);
+        app.world.get_resource_or_insert_with(HashMap::<WindowId, EguiInput>::default);
+        app.world.get_resource_or_insert_with(HashMap::<WindowId, EguiOutput>::default);
+        app.world.get_resource_or_insert_with(HashMap::<WindowId, WindowSize>::default);
+        app.world.get_resource_or_insert_with(HashMap::<WindowId, EguiShapes>::default);
         #[cfg(feature = "manage_clipboard")]
-        world.get_resource_or_insert_with(EguiClipboard::default);
-        world.insert_resource(EguiContext::new());
+        app.world.get_resource_or_insert_with(EguiClipboard::default);
+        app.world.insert_resource(EguiContext::new());
 
-        let world = world.cell();
+        let world = app.world.cell();
 
         let mut pipelines = world
             .get_resource_mut::<Assets<PipelineDescriptor>>()
